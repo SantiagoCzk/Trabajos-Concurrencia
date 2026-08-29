@@ -1,10 +1,16 @@
-/* Introducción a la Concurrencia
- *
- * Esta versión 3 recibe H (cantidad de hilos) como parámetro por línea
+/*
+	Ejercicio 5
+
+	Cree la versión 3 del programa mm.c (multiplicación de matrices), basado en la versión 
+	2 disponible en el Aula, pero mejorado. Esta versión debe repartir el trabajo en H hilos. 
+	H debería dividir exactamente a N, siendo N el tamaño de la matriz. El valor H se pasará 
+	como parámetro en la invocación del programa. Utilice un tamaño de matriz de 
+	1024x1024 o mayor, si la memoria disponible lo permite.
+*/
+
+/* Esta versión 3 recibe H (cantidad de hilos) como parámetro por línea
  * de comandos. H debe dividir exactamente a N. Cada hilo procesa un
- * bloque contiguo de N/H filas.
- *
- */
+ * bloque contiguo de N/H filas. */
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
@@ -37,10 +43,8 @@ void iniMat(double mat[][N], int len, double iniVal)
 			mat[i][j] = iniVal;
 }
 
-/* Check1Mat: Chequea que la matriz resultante quede con
- *            el mismo valor en todas sus celdas.
- * Retorna: 0 si está correcta, 1 si hay algún valor distinto de finVal.
- */
+/* Check1Mat: Chequea que la matriz resultante quede con el mismo valor en todas sus celdas.
+ * Retorna: 0 si está correcta, 1 si hay algún valor distinto de finVal. */
 int Check1Mat(double mat[][N], int len, double finVal)
 {
 	int i, j;
