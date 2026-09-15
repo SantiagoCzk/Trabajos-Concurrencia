@@ -4,9 +4,9 @@ TARGET = ej5
 # Archivo fuente en C
 SRC = ej5.c
 
-# Compilador y banderas de optimización/advertencia
+# Compilador y banderas de optimización/advertencia (CON -pthread)
 CC = gcc
-CFLAGS = -Wall -Wextra
+CFLAGS = -Wall -Wextra -pthread
 
 # Regla principal por defecto
 all: $(TARGET)
