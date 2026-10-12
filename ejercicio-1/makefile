@@ -2,7 +2,7 @@
 CC = gcc
 
 # Definir las banderas de compilación (advertencias y optimización)
-CFLAGS = -Wall -g
+CFLAGS = -Wall -g -fopenmp
 
 # Nombre del archivo ejecutable final
 TARGET = ej1
