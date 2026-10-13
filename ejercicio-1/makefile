@@ -1,19 +1,22 @@
-# Definir el compilador
-CC = gcc
-
-# Definir las banderas de compilación (advertencias y optimización)
-CFLAGS = -Wall -g -fopenmp
-
-# Nombre del archivo ejecutable final
+# Nombre del ejecutable
 TARGET = ej1
 
-# Regla principal por defecto
+# Archivo fuente
+SRC = ej1.c
+
+# Compilador
+CC = gcc
+
+# Banderas de compilacion (agregamos -fopenmp para OpenMP)
+CFLAGS = -Wall -Wextra -fopenmp
+
+# Regla por defecto
 all: $(TARGET)
 
-# Regla para construir el ejecutable a partir del archivo C
-$(TARGET): ej1.c
-	$(CC) $(CFLAGS) ej1.c -o $(TARGET)
+# Compilacion
+$(TARGET): $(SRC)
+	$(CC) $(CFLAGS) $(SRC) -o $(TARGET)
 
-# Regla para limpiar los archivos generados
+# Limpieza de ejecutables
 clean:
 	rm -f $(TARGET)
