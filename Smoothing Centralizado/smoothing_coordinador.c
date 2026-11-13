@@ -32,7 +32,7 @@ int main(int argc, char** argv) {
         if (rank == 0) {
             printf("Uso: mpiexec -np <procesos> %s <entrada.txt> <salida.txt> <d> <iteraciones>\n", argv[0]);
         }
-        MPI_Finalize(); // Termina el entorno MPI[cite: 1]
+        MPI_Finalize(); // Termina el entorno MPI
         return 0;
     }
 
@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
         printf("[Coordinador] Matriz %dx%d cargada correctamente desde '%s'.\n", n, n, archivo_entrada);
     }
 
-    // Transmitir la dimensión 'n' a todos los trabajadores mediante Broadcast[cite: 1]
+    // Transmitir la dimensión 'n' a todos los trabajadores mediante Broadcast
     MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     int filas_por_worker = n / num_workers; // Cantidad base de filas por trabajador
@@ -102,10 +102,10 @@ int main(int argc, char** argv) {
                 int fin_envio = (fila_inicio + cantidad_filas < n) ? (fila_inicio + cantidad_filas) : (n - 1);
                 int total_filas_enviar = fin_envio - inicio_envio + 1;
 
-                // Enviar cabecera (número de filas que recibe este trabajador)[cite: 1]
+                // Enviar cabecera (número de filas que recibe este trabajador)
                 MPI_Send(&total_filas_enviar, 1, MPI_INT, w, 0, MPI_COMM_WORLD);
 
-                // Enviar submatriz con celdas fantasma incorporadas[cite: 1]
+                // Enviar submatriz con celdas fantasma incorporadas
                 MPI_Send(&imagen[inicio_envio * n], total_filas_enviar * n, MPI_INT, w, 1, MPI_COMM_WORLD);
             }
 
@@ -114,7 +114,7 @@ int main(int argc, char** argv) {
                 int fila_inicio = (w - 1) * filas_por_worker;
                 int cantidad_filas = (w == num_workers) ? (n - fila_inicio) : filas_por_worker;
 
-                // Recibir y reconstruir las filas calculadas directamente en la matriz global[cite: 1]
+                // Recibir y reconstruir las filas calculadas directamente en la matriz global
                 MPI_Recv(&imagen[fila_inicio * n], cantidad_filas * n, MPI_INT, w, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }
         }
@@ -149,13 +149,13 @@ int main(int argc, char** argv) {
         for (int iter = 0; iter < iteraciones; iter++) {
             int total_filas_recibidas;
 
-            // Recibir la cantidad de filas enviadas en este paquete[cite: 1]
+            // Recibir la cantidad de filas enviadas en este paquete
             MPI_Recv(&total_filas_recibidas, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
             int *sub_imagen = (int*)malloc(total_filas_recibidas * n * sizeof(int));
             int *resultado_local = (int*)malloc(mis_filas_reales * n * sizeof(int));
 
-            // Recibir la porción de submatriz con celdas fantasma[cite: 1]
+            // Recibir la porción de submatriz con celdas fantasma
             MPI_Recv(sub_imagen, total_filas_recibidas * n, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
             // Determinar si la primera fila recibida corresponde al halo o a la submatriz real
@@ -176,7 +176,7 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Enviar únicamente las filas reales procesadas de regreso al coordinador[cite: 1]
+            // Enviar únicamente las filas reales procesadas de regreso al coordinador
             MPI_Send(resultado_local, mis_filas_reales * n, MPI_INT, 0, 2, MPI_COMM_WORLD);
 
             free(sub_imagen);
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Libera los recursos de la librería MPI[cite: 1]
+    // Libera los recursos de la librería MPI
     MPI_Finalize();
     return 0;
 }
