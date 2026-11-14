@@ -21,18 +21,21 @@ int contar_vecinos(int *matriz, int r, int c, int filas, int n) {
 }
 
 int main(int argc, char** argv) {
+    // Desactivar buffering de stdout para que los printf salgan al instante en MPI
+    setvbuf(stdout, NULL, _IONBF, 0);
+
     int rank, size;
     
     // Inicialización del entorno MPI
     MPI_Init(&argc, &argv);
-    MPI_Comm_rank(MPI_COMM_WORLD, &rank); // Identificador del proceso
-    MPI_Comm_size(MPI_COMM_WORLD, &size); // Cantidad total de procesos
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &size);
 
     if (argc != 5) {
         if (rank == 0) {
             printf("Uso: mpiexec -np <procesos> %s <entrada.txt> <salida.txt> <d> <iteraciones>\n", argv[0]);
         }
-        MPI_Finalize(); // Termina el entorno MPI
+        MPI_Finalize();
         return 0;
     }
 
@@ -69,10 +72,22 @@ int main(int argc, char** argv) {
             MPI_Abort(MPI_COMM_WORLD, 1);
         }
 
-        imagen = (int*)malloc(n * n * sizeof(int));
+        if (n < num_workers) {
+            printf("Error: La dimensión N (%d) debe ser mayor o igual a la cantidad de trabajadores (%d).\n", n, num_workers);
+            fclose(f_in);
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
+        imagen = (int*)malloc((size_t)n * (size_t)n * sizeof(int));
+        if (!imagen) {
+            printf("Error: Memoria insuficiente para matriz %dx%d.\n", n, n);
+            fclose(f_in);
+            MPI_Abort(MPI_COMM_WORLD, 1);
+        }
+
         for (int i = 0; i < n * n; i++) {
             if (fscanf(f_in, "%d", &imagen[i]) != 1) {
-                printf("Error al leer los valores de la matriz en el archivo.\n");
+                printf("Error al leer el elemento %d de la matriz en '%s'.\n", i, archivo_entrada);
                 fclose(f_in);
                 free(imagen);
                 MPI_Abort(MPI_COMM_WORLD, 1);
@@ -82,30 +97,28 @@ int main(int argc, char** argv) {
         printf("[Coordinador] Matriz %dx%d cargada correctamente desde '%s'.\n", n, n, archivo_entrada);
     }
 
-    // Transmitir la dimensión 'n' a todos los trabajadores mediante Broadcast
+    // Transmitir la dimensión 'n' a todos los trabajadores mediante Broadcast[cite: 1]
     MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-    int filas_por_worker = n / num_workers; // Cantidad base de filas por trabajador
+    int filas_por_worker = n / num_workers;
 
     // =========================================================================
     // 2. LÓGICA DEL PROCESO COORDINADOR (Rank 0)
     // =========================================================================
     if (rank == 0) {
+        double t_inicio = MPI_Wtime();
+
         for (int iter = 0; iter < iteraciones; iter++) {
-            // Fase de Distribución: Enviar submatrices + halos (celdas fantasma) a cada worker
+            // Fase de Distribución: Enviar submatrices + halos a cada worker
             for (int w = 1; w <= num_workers; w++) {
                 int fila_inicio = (w - 1) * filas_por_worker;
                 int cantidad_filas = (w == num_workers) ? (n - fila_inicio) : filas_por_worker;
 
-                // Determinar bordes extras (halos superior e inferior)
                 int inicio_envio = (fila_inicio > 0) ? (fila_inicio - 1) : 0;
                 int fin_envio = (fila_inicio + cantidad_filas < n) ? (fila_inicio + cantidad_filas) : (n - 1);
                 int total_filas_enviar = fin_envio - inicio_envio + 1;
 
-                // Enviar cabecera (número de filas que recibe este trabajador)
                 MPI_Send(&total_filas_enviar, 1, MPI_INT, w, 0, MPI_COMM_WORLD);
-
-                // Enviar submatriz con celdas fantasma incorporadas
                 MPI_Send(&imagen[inicio_envio * n], total_filas_enviar * n, MPI_INT, w, 1, MPI_COMM_WORLD);
             }
 
@@ -114,19 +127,20 @@ int main(int argc, char** argv) {
                 int fila_inicio = (w - 1) * filas_por_worker;
                 int cantidad_filas = (w == num_workers) ? (n - fila_inicio) : filas_por_worker;
 
-                // Recibir y reconstruir las filas calculadas directamente en la matriz global
                 MPI_Recv(&imagen[fila_inicio * n], cantidad_filas * n, MPI_INT, w, 2, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
             }
         }
 
-        // =========================================================================
+        double t_fin = MPI_Wtime();
+
+        // =====================================================================
         // 3. GUARDADO DE LA IMAGEN RESULTANTE EN TXT (Rank 0)
-        // =========================================================================
+        // =====================================================================
         FILE *f_out = fopen(archivo_salida, "w");
         if (!f_out) {
             printf("Error: No se pudo crear el archivo de salida '%s'.\n", archivo_salida);
         } else {
-            fprintf(f_out, "%d\n", n); // Primera línea: dimensión N
+            fprintf(f_out, "%d\n", n);
             for (int i = 0; i < n; i++) {
                 for (int j = 0; j < n; j++) {
                     fprintf(f_out, "%d ", imagen[i * n + j]);
@@ -134,41 +148,36 @@ int main(int argc, char** argv) {
                 fprintf(f_out, "\n");
             }
             fclose(f_out);
-            printf("[Coordinador] Procesamiento finalizado. Imagen resultante guardada en '%s'.\n", archivo_salida);
+            printf("[Coordinador] Procesamiento finalizado en %.6f s. Resultado guardado en '%s'.\n", t_fin - t_inicio, archivo_salida);
         }
 
         free(imagen);
 
     } else {
-        // =========================================================================
+        // =====================================================================
         // 4. LÓGICA DE LOS PROCESOS TRABAJADORES (Rank > 0)
-        // =========================================================================
+        // =====================================================================
         int mi_fila_inicio = (rank - 1) * filas_por_worker;
         int mis_filas_reales = (rank == num_workers) ? (n - mi_fila_inicio) : filas_por_worker;
 
         for (int iter = 0; iter < iteraciones; iter++) {
-            int total_filas_recibidas;
+            int total_filas_recibidas = 0;
 
-            // Recibir la cantidad de filas enviadas en este paquete
             MPI_Recv(&total_filas_recibidas, 1, MPI_INT, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-            int *sub_imagen = (int*)malloc(total_filas_recibidas * n * sizeof(int));
-            int *resultado_local = (int*)malloc(mis_filas_reales * n * sizeof(int));
+            int *sub_imagen = (int*)malloc((size_t)total_filas_recibidas * (size_t)n * sizeof(int));
+            int *resultado_local = (int*)malloc((size_t)mis_filas_reales * (size_t)n * sizeof(int));
 
-            // Recibir la porción de submatriz con celdas fantasma
             MPI_Recv(sub_imagen, total_filas_recibidas * n, MPI_INT, 0, 1, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-            // Determinar si la primera fila recibida corresponde al halo o a la submatriz real
             int offset_local = (mi_fila_inicio > 0) ? 1 : 0;
 
-            // Cómputo del suavizado sobre el bloque asignado
             for (int r = 0; r < mis_filas_reales; r++) {
                 for (int c = 0; c < n; c++) {
                     int idx_real = (offset_local + r) * n + c;
 
                     if (sub_imagen[idx_real] == 1) {
                         int vecinos = contar_vecinos(sub_imagen, offset_local + r, c, total_filas_recibidas, n);
-                        // Aplicación de la regla del umbral d
                         resultado_local[r * n + c] = (vecinos < d) ? 0 : 1;
                     } else {
                         resultado_local[r * n + c] = 0;
@@ -176,7 +185,6 @@ int main(int argc, char** argv) {
                 }
             }
 
-            // Enviar únicamente las filas reales procesadas de regreso al coordinador
             MPI_Send(resultado_local, mis_filas_reales * n, MPI_INT, 0, 2, MPI_COMM_WORLD);
 
             free(sub_imagen);
@@ -184,7 +192,6 @@ int main(int argc, char** argv) {
         }
     }
 
-    // Libera los recursos de la librería MPI
     MPI_Finalize();
     return 0;
 }
