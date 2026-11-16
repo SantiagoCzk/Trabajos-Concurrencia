@@ -33,7 +33,7 @@ int main(int argc, char** argv) {
 
     if (argc != 5) {
         if (rank == 0) {
-            printf("Uso: mpiexec -np <procesos> %s <entrada.txt> <salida.txt> <d> <iteraciones>\n", argv[0]);
+            printf("Uso: mpiexec -np <procesos> %s <entrada.txt> <salida.txt> <d (1-8)> <iteraciones>\n", argv[0]);
         }
         MPI_Finalize();
         return 0;
@@ -43,6 +43,15 @@ int main(int argc, char** argv) {
     char *archivo_salida = argv[2];
     int d = atoi(argv[3]);
     int iteraciones = atoi(argv[4]);
+
+    // La vecindad de Moore 3x3 tiene como maximo 8 vecinos: d fuera de [1,8] no tiene sentido
+    if (d < 1 || d > 8) {
+        if (rank == 0) {
+            printf("Error: 'd' debe estar entre 1 y 8 (se recibio d=%d). La vecindad de Moore 3x3 tiene como maximo 8 vecinos.\n", d);
+        }
+        MPI_Finalize();
+        return 0;
+    }
     
     int num_workers = size - 1;
     if (num_workers <= 0) {
@@ -97,7 +106,7 @@ int main(int argc, char** argv) {
         printf("[Coordinador] Matriz %dx%d cargada correctamente desde '%s'.\n", n, n, archivo_entrada);
     }
 
-    // Transmitir la dimensión 'n' a todos los trabajadores mediante Broadcast[cite: 1]
+    // Transmitir la dimensión 'n' a todos los trabajadores mediante Broadcast
     MPI_Bcast(&n, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
     int filas_por_worker = n / num_workers;
